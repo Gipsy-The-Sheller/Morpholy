@@ -52,6 +52,14 @@ def _ss_residual(X: np.ndarray, fitted: np.ndarray) -> float:
     return float(np.sum((X - fitted) ** 2))
 
 
+def _safe_dtd_inverse(design: np.ndarray) -> np.ndarray:
+    """安全计算 (D^T D)^{-1}，矩阵奇异时退化为伪逆。"""
+    try:
+        return np.linalg.inv(design.T @ design)
+    except np.linalg.LinAlgError:
+        return np.linalg.pinv(design.T @ design)
+
+
 # ---------------------------------------------------------------------------
 # Procrustes 回归（形状 ~ 连续变量，如质心大小）
 # ---------------------------------------------------------------------------
@@ -119,7 +127,7 @@ def procrustes_regression(
     for _ in range(n_permutations):
         y_perm = rng.permutation(y)
         design_perm = np.column_stack([np.ones(p), y_perm])
-        B_perm = DTD_inv_for(design_perm) @ design_perm.T @ X
+        B_perm = _safe_dtd_inverse(design_perm) @ design_perm.T @ X
         fitted_perm = design_perm @ B_perm
         ss_res_perm = _ss_residual(X, fitted_perm)
         ss_reg_perm = ss_tot - ss_res_perm
@@ -136,14 +144,6 @@ def procrustes_regression(
     coefficients = B[1]  # (2n,)
 
     return coefficients, float(r_squared), float(f_stat), float(p_value)
-
-
-def DTD_inv_for(design: np.ndarray) -> np.ndarray:
-    """安全计算 (D^T D)^{-1}，失败时用 lstsq 伪逆。"""
-    try:
-        return np.linalg.inv(design.T @ design)
-    except np.linalg.LinAlgError:
-        return np.linalg.pinv(design.T @ design)
 
 
 # ---------------------------------------------------------------------------
